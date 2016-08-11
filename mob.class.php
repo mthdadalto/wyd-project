@@ -11,11 +11,8 @@
 class account {
     private $path="./";
 	public $account;
-	public $account_status;
-	private $initial;
+	public $account_primary;
 	public $data;
-	private $account_attr=array();
-	private $char_struct=array();
 
 	//Point to account path
 	function __construct($path){
@@ -25,24 +22,34 @@ class account {
 
 	//Read a account content to $data
 	public function read($account, $mode="full"){
-	    $this->initial=$account[0];
-	    if(!file_exists($this->path.'/'.$account[0].'/'.$account)){
+    $path=$this->path.'/'.($mode!='mob'?$account[0].'/':null).$account;
+	    if(!file_exists($path)){
 	        return false;
 	    }
 	    $this->account=$account;
-	    $res=@fopen($this->path.'/'.$account[0].'/'.$account,"r");
+	    $res=@fopen($path, "r");
+
 	    switch ($mode){
 	        case 'full':
 	           $read=@fread($res, 4292);
 	           $this->data=strtoupper(trim(bin2hex($read)));
+             $this->account_primary=array(
+               "account"=>  substr($read,0,16),
+               "password"=> substr($read,16,16)
+             );
 	           break;
 	        case 'primary':
 	            $read=@fread($res, 32);
 	            $this->data=strtoupper(trim(bin2hex($read)));
+              $this->account_primary=array(
+                "account"=>  substr($read,0,16),
+                "password"=> substr($read,16,16)
+              );
 	           break;
 	        case 'mob':
 	            $read=@fread($res, 756);
 	            $this->data=strtoupper(trim(bin2hex($read)));
+              $this->account_primary=null;
 	           break;
 	    }
 	    fclose($res);
@@ -59,7 +66,11 @@ class account {
 
 	//Load one char informations
 	public function account_char($number){
-	    return $this->read_mob(substr($this->data,416+(1512*$number),1512));
+    if($number=='mob'){
+      return $this->read_mob($this->data);
+    }else{
+      return $this->read_mob(substr($this->data,416+(1512*$number),1512));return $this->read_mob(substr($this->data,416+(1512*$number),1512));
+    }
 	}
 
 	//Return char informations by data to $char
@@ -97,6 +108,23 @@ class account {
 	        "mp_max" =>$this->hex2num(substr($data, 152,4)),
 	        "mp_now" =>$this->hex2num(substr($data, 156,4)),
 
+          "face"   =>$this->get_item(substr($data, 184,16)),
+          "helmet" =>$this->get_item(substr($data, 200,16)),
+          "chest"  =>$this->get_item(substr($data, 216,16)),
+          "legs"   =>$this->get_item(substr($data, 232,16)),
+          "gloves" =>$this->get_item(substr($data, 248,16)),
+          "boots"  =>$this->get_item(substr($data, 264,16)),
+          "hand1"  =>$this->get_item(substr($data, 280,16)),
+          "hand2"  =>$this->get_item(substr($data, 296,16)),
+          "ring"   =>$this->get_item(substr($data, 312,16)),
+          "neck"   =>$this->get_item(substr($data, 328,16)),
+          "jewel"  =>$this->get_item(substr($data, 344,16)),
+          "medal"  =>$this->get_item(substr($data, 360,16)),
+          "guild"  =>$this->get_item(substr($data, 376,16)),
+          "fairy"  =>$this->get_item(substr($data, 392,16)),
+          "mount"  =>$this->get_item(substr($data, 408,16)),
+          "cape"   =>$this->get_item(substr($data, 424,16)),
+
 	        "frag_now" =>$this->hex2num(substr($data, 1454,2)),
 	        "frag_max" =>$this->hex2num(substr($data, 1458,2)),
 
@@ -113,33 +141,40 @@ class account {
 	        "res4"     =>$this->hex2num(substr($data, 1510,2))
 	    );
 	    for($i=0;$i<64;$i++){
-	        $item=substr($data, 440+(16*$i),4);
-	       if($item=="0000"){continue;}
-	       $box[$i]=array(
-	           "item"=>$this->hex2num($item),
-	           "att1"=>$this->hex2num(substr($data, 444+(16*$i),2)),
-	           "val1"=>$this->hex2num(substr($data, 446+(16*$i),2)),
-	           "att2"=>$this->hex2num(substr($data, 448+(16*$i),2)),
-	           "val2"=>$this->hex2num(substr($data, 450+(16*$i),2)),
-	           "att3"=>$this->hex2num(substr($data, 452+(16*$i),2)),
-	           "val3"=>$this->hex2num(substr($data, 454+(16*$i),2)),
-	       );
+	        $item=$this->get_item(substr($data, 440+(16*$i),16));
+	       if(!$item){continue;}
+	       $box[$i]=$item;
 	    }
 
 	    return $char_ready=array("attr"=>$attr,'box'=>$box);
 	}
 
-	//Save account content
-	abstract function save(){
-	    if($this->consistence()){
+	//Save account content - in development
+	public function save(){
+	    /*if($this->consistence()){
 	        //save
 	        $this->close();
 	        return true;
 	    }
 	    else{
 	        return false;
-	    }
+	    }*/
 	}
+
+  //Get item array from data
+  protected function get_item($data){
+    $item=substr($data, 0,4);
+    if($item=="0000"){return null;}
+    return array(
+        "item"=>$this->hex2num($item),
+        "att1"=>$this->hex2num(substr($data, 4,2)),
+        "val1"=>$this->hex2num(substr($data, 6,2)),
+        "att2"=>$this->hex2num(substr($data, 8,2)),
+        "val2"=>$this->hex2num(substr($data, 10,2)),
+        "att3"=>$this->hex2num(substr($data, 12,2)),
+        "val3"=>$this->hex2num(substr($data, 14,2)),
+    );
+  }
 
 	//Verify account badsize
 	protected function consistence(){
